@@ -13,7 +13,7 @@ use crate::object::{Ref, TInstance, TRef};
 
 /// Builder type used to register a method on a `NativeClass`.
 pub struct MethodBuilder<'a, C, F> {
-    class_builder: &'a super::ClassBuilder<C>,
+    class_builder: &'a ClassBuilder<C>,
     name: &'a str,
     method: F,
 

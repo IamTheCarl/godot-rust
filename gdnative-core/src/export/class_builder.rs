@@ -34,7 +34,6 @@ use std::ffi::CString;
 use std::marker::PhantomData;
 use std::ptr;
 
-use crate::core_types::{GodotString, Variant};
 use crate::export::*;
 use crate::object::NewRef;
 use crate::private::get_api;
@@ -141,23 +140,53 @@ impl<C: NativeClass> ClassBuilder<C> {
         PropertyBuilder::new(self, name)
     }
 
+    /// Returns a `SignalBuilder` which can be used to add a signal to the class being
+    /// registered.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use gdnative::prelude::*;
+    ///
+    /// #[derive(NativeClass)]
+    /// #[inherit(Node)]
+    /// #[register_with(Self::my_register)]
+    /// #[no_constructor]
+    /// struct MyType {}
+    ///
+    /// // Note: no #[methods] required
+    /// impl MyType {
+    ///     fn my_register(builder: &ClassBuilder<MyType>) {
+    ///         builder
+    ///             .signal("sig")
+    ///             .arg(SignalArgument::with_default("some_i64", Variant::new(100)))
+    ///             .done();
+    ///     }
+    /// }
+    /// ```
     #[inline]
-    pub fn add_signal(&self, signal: Signal) {
+    pub fn signal<'a>(&'a self, name: &'a str) -> SignalBuilder<'a, C> {
+        SignalBuilder::new(self, name)
+    }
+
+    #[inline]
+    pub(crate) fn add_signal(&self, signal: Signal) {
         unsafe {
-            let name = GodotString::from_str(signal.name);
-            let owned = signal
+            let args_and_hints = signal
                 .args
                 .iter()
                 .map(|arg| {
-                    let arg_name = GodotString::from_str(arg.name);
                     let hint_string = arg.export_info.hint_string.new_ref();
-                    (arg, arg_name, hint_string)
+                    (arg, hint_string)
                 })
                 .collect::<Vec<_>>();
-            let mut args = owned
+
+            let mut sys_args = args_and_hints
                 .iter()
-                .map(|(arg, arg_name, hint_string)| sys::godot_signal_argument {
-                    name: arg_name.to_sys(),
+                .map(|(arg, hint_string)| sys::godot_signal_argument {
+                    name: arg.name.to_sys(),
                     type_: arg.default.get_type() as i32,
                     hint: arg.export_info.hint_kind,
                     hint_string: hint_string.to_sys(),
@@ -165,13 +194,14 @@ impl<C: NativeClass> ClassBuilder<C> {
                     default_value: arg.default.to_sys(),
                 })
                 .collect::<Vec<_>>();
+
             (get_api().godot_nativescript_register_signal)(
                 self.init_handle,
                 self.class_name.as_ptr(),
                 &sys::godot_signal {
-                    name: name.to_sys(),
-                    num_args: args.len() as i32,
-                    args: args.as_mut_ptr(),
+                    name: signal.name.to_sys(),
+                    num_args: sys_args.len() as i32,
+                    args: sys_args.as_mut_ptr(),
                     num_default_args: 0,
                     default_args: ptr::null_mut(),
                 },
@@ -210,16 +240,4 @@ impl<C: NativeClass> ClassBuilder<C> {
             );
         }
     }
-}
-
-pub struct Signal<'l> {
-    pub name: &'l str,
-    pub args: &'l [SignalArgument<'l>],
-}
-
-pub struct SignalArgument<'l> {
-    pub name: &'l str,
-    pub default: Variant,
-    pub export_info: ExportInfo,
-    pub usage: PropertyUsage,
 }
