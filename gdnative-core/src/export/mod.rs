@@ -14,6 +14,7 @@ mod class_builder;
 mod macros;
 mod method;
 mod property;
+mod signal;
 
 pub(crate) mod class_registry;
 pub(crate) mod emplace;
@@ -26,3 +27,4 @@ pub use class::*;
 pub use class_builder::*;
 pub use method::*;
 pub use property::*;
+pub use signal::*;
